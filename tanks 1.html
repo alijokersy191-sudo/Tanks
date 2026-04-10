@@ -1,0 +1,1513 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام إدارة الخزانات</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Tajawal', sans-serif; background-color: #f3f4f6; }
+        .tab-active { border-bottom: 3px solid #2563eb; color: #2563eb; font-weight: bold; }
+        .tab-inactive { color: #6b7280; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 200; justify-content: center; align-items: center; }
+        .modal.active { display: flex; }
+        .group-badge { display: inline-block; padding: 4px 12px; border-radius: 16px; font-size: 0.75rem; font-weight: 600; }
+        
+        .select-wrapper { position: relative; }
+        .select-input { width: 100%; padding: 12px 40px 12px 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; cursor: pointer; }
+        .select-input:focus { outline: none; border-color: #2563eb; }
+        .select-arrow { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #6b7280; }
+        .select-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 2px solid #e5e7eb; border-radius: 8px; margin-top: 4px; max-height: 300px; overflow-y: auto; z-index: 50; display: none; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .select-dropdown.visible { display: block; }
+        .select-option { padding: 10px 12px; cursor: pointer; border-bottom: 1px solid #f3f4f6; }
+        .select-option:hover { background-color: #eff6ff; }
+        .no-results { padding: 20px; text-align: center; color: #9ca3af; }
+        
+        #appContent { display: none; }
+        #loginScreen { display: block; }
+        #appContent.active { display: block; }
+        #loginScreen.hidden { display: none; }
+        
+        .sync-status { font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; }
+        .sync-ok { background: #d1fae5; color: #065f46; }
+        .sync-error { background: #fee2e2; color: #991b1b; }
+        .sync-pending { background: #fef3c7; color: #92400e; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Login Screen -->
+    <div id="loginScreen" class="fixed inset-0 bg-gradient-to-br from-blue-600 to-purple-700 flex items-center justify-center z-50">
+        <div class="bg-white rounded-2xl p-8 w-full max-w-md mx-4 shadow-2xl">
+            <div class="text-center mb-6">
+                <div class="bg-blue-600 text-white w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                </div>
+                <h1 class="text-2xl font-bold text-gray-800">🔐 نظام الخزانات</h1>
+                <p class="text-gray-500 mt-2">أدخل كلمة المرور للدخول</p>
+            </div>
+            
+            <div class="space-y-4">
+                <input type="password" id="passwordInput" class="w-full p-4 border-2 border-gray-300 rounded-xl text-center text-2xl tracking-widest" 
+                    placeholder="••••" maxlength="4" onkeypress="checkPassword(event)">
+                
+                <button onclick="checkLogin()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors">
+                    دخول
+                </button>
+                
+                <p id="loginError" class="text-red-500 text-center hidden">❌ كلمة المرور غير صحيحة</p>
+            </div>
+            
+            <p class="text-center text-xs text-gray-400 mt-6">نسخة تجريبية - جميع الحقوق محفوظة</p>
+        </div>
+    </div>
+
+    <!-- Main App Content -->
+    <div id="appContent">
+        <header class="bg-white shadow-sm sticky top-0 z-10">
+            <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <div class="bg-green-600 text-white p-2 rounded-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-gray-800">💧 نظام الخزانات</h1>
+                        <p class="text-xs text-gray-500">متصل بـ Google Sheets</p>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <div class="text-sm text-gray-500" id="currentDate"></div>
+                    <div id="syncStatus" class="sync-status sync-pending mt-1 inline-block">🔄 جاري التحميل...</div>
+                </div>
+            </div>
+            <nav class="max-w-7xl mx-auto px-4 flex gap-2 border-t overflow-x-auto">
+                <button onclick="goTab('entry')" id="btn-entry" class="tab-active py-3 px-2 text-sm whitespace-nowrap">📝 قياس</button>
+                <button onclick="goTab('samples')" id="btn-samples" class="tab-inactive py-3 px-2 text-sm whitespace-nowrap">🧪 عينات</button>
+                <button onclick="goTab('report')" id="btn-report" class="tab-inactive py-3 px-2 text-sm whitespace-nowrap">📊 تقرير</button>
+                <button onclick="goTab('inventory')" id="btn-inventory" class="tab-inactive py-3 px-2 text-sm whitespace-nowrap">📋 جرد</button>
+                <button onclick="goTab('group-inventory')" id="btn-group-inventory" class="tab-inactive py-3 px-2 text-sm whitespace-nowrap">📦 مجموعات</button>
+                <button onclick="goTab('groups')" id="btn-groups" class="tab-inactive py-3 px-2 text-sm whitespace-nowrap">🏷️ إدارة</button>
+                <button onclick="goTab('config')" id="btn-config" class="tab-inactive py-3 px-2 text-sm whitespace-nowrap">⚙️ إعدادات</button>
+                <button onclick="logout()" class="ml-auto py-3 px-3 text-sm text-red-600 hover:text-red-800">🚪 خروج</button>
+            </nav>
+        </header>
+
+        <main class="flex-grow max-w-7xl mx-auto px-4 py-6 w-full">
+            
+            <!-- Entry Tab -->
+            <section id="tab-entry" class="block">
+                <div class="bg-white rounded-xl shadow p-6 max-w-2xl mx-auto">
+                    <h2 class="text-lg font-bold mb-4 border-b pb-2">تسجيل قراءة يومية</h2>
+                    
+                    <div class="select-wrapper mb-4">
+                        <label class="block text-sm font-medium mb-2">اختر الخزان</label>
+                        <input type="text" class="select-input" id="tankSelect" placeholder="🔍 ابحث أو اختر..." onclick="toggleTankList()" readonly>
+                        <span class="select-arrow">▼</span>
+                        <input type="hidden" id="tankIdHidden">
+                        <div class="select-dropdown" id="tankList"></div>
+                    </div>
+                    
+                    <div id="tankInfo" class="mb-4 flex gap-2 flex-wrap"></div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">التاريخ</label>
+                            <input type="date" id="entryDate" class="w-full p-3 border rounded-lg">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">الوقت</label>
+                            <input type="time" id="entryTime" class="w-full p-3 border rounded-lg">
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">القراءة (سم)</label>
+                            <input type="number" id="entryLevel" step="0.01" class="w-full p-3 border rounded-lg" oninput="calcVol()">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">💧 ماء (سم)</label>
+                            <input type="number" id="entryWater" step="0.01" class="w-full p-3 border rounded-lg" placeholder="0 إذا لا يوجد">
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gradient-to-l from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200 mb-4 flex justify-between items-center">
+                        <span class="text-blue-800 font-medium">الحجم المحسوب:</span>
+                        <span class="text-2xl font-bold text-blue-600" id="volDisplay">0.000 م³</span>
+                    </div>
+                    
+                    <button type="button" onclick="saveRec()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg">💾 حفظ القياس</button>
+                </div>
+            </section>
+
+            <!-- Samples Tab -->
+            <section id="tab-samples" class="hidden">
+                <div class="bg-white rounded-xl shadow p-6 max-w-2xl mx-auto">
+                    <h2 class="text-lg font-bold mb-4 border-b pb-2">🧪 سجل أخذ العينات</h2>
+                    
+                    <div class="space-y-4">
+                        <div class="select-wrapper">
+                            <label class="block text-sm font-medium mb-2">اختر الخزان</label>
+                            <input type="text" class="select-input" id="sampleTankSelect" placeholder="🔍 ابحث عن خزان..." onclick="toggleSampleTankList()" readonly>
+                            <span class="select-arrow">▼</span>
+                            <input type="hidden" id="sampleTankIdHidden">
+                            <div class="select-dropdown" id="sampleTankList"></div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">تاريخ أخذ العينة</label>
+                                <input type="date" id="sampleDate" class="w-full p-3 border rounded-lg">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">وقت أخذ العينة</label>
+                                <input type="time" id="sampleTime" class="w-full p-3 border rounded-lg">
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium mb-2">ملاحظات على العينة</label>
+                            <textarea id="sampleNotes" class="w-full p-3 border rounded-lg" rows="3" placeholder="اكتب أي ملاحظات..."></textarea>
+                        </div>
+                        
+                        <button type="button" onclick="saveSample()" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg">🧪 تسجيل العينة</button>
+                    </div>
+                    
+                    <div class="mt-6 border-t pt-4">
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="font-bold text-gray-700">📋 آخر العينات المسجلة</h3>
+                            <button type="button" onclick="exportSamplesPDF()" class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-green-700">📄 تصدير PDF</button>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="p-2 text-right">التاريخ</th>
+                                        <th class="p-2 text-right">الوقت</th>
+                                        <th class="p-2 text-right">الخزان</th>
+                                        <th class="p-2 text-right">ملاحظات</th>
+                                        <th class="p-2 text-right">حذف</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="samplesBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Report Tab -->
+            <section id="tab-report" class="hidden">
+                <div class="bg-white rounded-xl shadow p-6">
+                    <div class="flex flex-wrap gap-2 mb-4 items-center border-b pb-4">
+                        <label class="text-sm font-medium">الشهر:</label>
+                        <input type="month" id="reportMonth" class="p-2 border rounded" onchange="showReport()">
+                        <label class="text-sm font-medium mr-2">المجموعة:</label>
+                        <select id="reportGroup" class="p-2 border rounded" onchange="showReport()">
+                            <option value="all">الكل</option>
+                        </select>
+                        <label class="text-sm font-medium mr-2">الخزان:</label>
+                        <select id="reportTank" class="p-2 border rounded" onchange="showReport()">
+                            <option value="all">الكل</option>
+                        </select>
+                        <button type="button" onclick="exportReportPDF()" class="ml-auto bg-green-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-700">📄 تصدير PDF</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="p-3 text-right">التاريخ</th>
+                                    <th class="p-3 text-right">الوقت</th>
+                                    <th class="p-3 text-right">الخزان</th>
+                                    <th class="p-3 text-right">المجموعة</th>
+                                    <th class="p-3 text-right">سم</th>
+                                    <th class="p-3 text-right">💧</th>
+                                    <th class="p-3 text-right">م³</th>
+                                    <th class="p-3 text-right">حذف</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reportBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Inventory Tab -->
+            <section id="tab-inventory" class="hidden">
+                <div class="bg-white rounded-xl shadow p-6">
+                    <div class="flex flex-wrap gap-2 mb-4 items-center border-b pb-4">
+                        <label class="text-sm font-medium">تاريخ الجرد:</label>
+                        <input type="date" id="inventoryDate" class="p-2 border rounded" onchange="showInventory()">
+                        <label class="text-sm font-medium mr-2">المجموعة:</label>
+                        <select id="inventoryGroup" class="p-2 border rounded" onchange="showInventory()">
+                            <option value="all">الكل</option>
+                        </select>
+                        <button type="button" onclick="exportInventoryPDF()" class="ml-auto bg-green-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-700">📄 تصدير PDF</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="p-3 text-right">الخزان</th>
+                                    <th class="p-3 text-right">المجموعة</th>
+                                    <th class="p-3 text-right">آخر قراءة</th>
+                                    <th class="p-3 text-right">آخر وقت</th>
+                                    <th class="p-3 text-right">القراءة</th>
+                                    <th class="p-3 text-right">💧 ماء</th>
+                                    <th class="p-3 text-right">الحجم</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inventoryBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Group Inventory Tab -->
+            <section id="tab-group-inventory" class="hidden">
+                <div class="bg-white rounded-xl shadow p-6">
+                    <div class="flex flex-wrap gap-2 mb-4 items-center border-b pb-4">
+                        <label class="text-sm font-medium">تاريخ الجرد:</label>
+                        <input type="date" id="groupInventoryDate" class="p-2 border rounded" onchange="showGroupInventory()">
+                        <button type="button" onclick="exportGroupInventoryPDF()" class="ml-auto bg-green-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-700">📄 تصدير PDF</button>
+                    </div>
+                    
+                    <h3 class="font-bold text-lg mb-4 text-gray-700">📊 ملخص المجموعات</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6" id="groupInventorySummary"></div>
+                    
+                    <h3 class="font-bold text-lg mb-4 text-gray-700">📋 تفاصيل كل مجموعة</h3>
+                    <div class="space-y-6" id="groupInventoryDetails"></div>
+                </div>
+            </section>
+
+            <!-- Groups Management Tab -->
+            <section id="tab-groups" class="hidden">
+                <div class="bg-white rounded-xl shadow p-6">
+                    <div class="flex justify-between items-center mb-4 border-b pb-4">
+                        <h2 class="text-lg font-bold">🏷️ إدارة المجموعات</h2>
+                        <button type="button" onclick="openAddGroup()" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-700">+ إضافة مجموعة</button>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="groupsGrid"></div>
+                </div>
+            </section>
+
+            <!-- Config Tab -->
+            <section id="tab-config" class="hidden">
+                <div class="bg-white rounded-xl shadow p-6">
+                    <div class="flex justify-between items-center mb-4 border-b pb-4">
+                        <h2 class="text-lg font-bold">⚙️ إعدادات النظام</h2>
+                        <button type="button" onclick="openAddTank()" class="bg-green-600 text-white px-4 py-2 rounded-lg">+ إضافة خزان</button>
+                    </div>
+                    
+                    <!-- Backup & Restore Section (NEW) -->
+                    <div class="bg-gradient-to-r from-purple-50 to-blue-50 p-4 rounded-lg mb-6 border-2 border-purple-200">
+                        <h3 class="font-bold mb-3 text-purple-800">💾 النسخ الاحتياطي والاستعادة</h3>
+                        <p class="text-sm text-gray-600 mb-3">احفظ نسخة من جميع بياناتك (الخزانات، القراءات، العينات، المجموعات، الإعدادات)</p>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <button type="button" onclick="exportBackup()" class="bg-purple-600 hover:bg-purple-700 text-white py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                تحميل نسخة احتياطية
+                            </button>
+                            
+                            <label class="bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors cursor-pointer">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                </svg>
+                                استعادة نسخة
+                                <input type="file" id="importBackupFile" accept=".json" onchange="importBackup(event)" class="hidden">
+                            </label>
+                        </div>
+                        
+                        <p class="text-xs text-gray-500 mt-3">⚠️ عند الاستعادة، سيتم استبدال جميع البيانات الحالية بالبيانات من النسخة الاحتياطية</p>
+                    </div>
+                    
+                    <!-- Settings Form -->
+                    <div class="bg-gray-50 p-4 rounded-lg mb-6">
+                        <h3 class="font-bold mb-4">⚙️ الإعدادات العامة</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">عدد الخزانات الافتراضي</label>
+                                <input type="number" id="defaultTankCount" value="62" class="w-full p-3 border rounded-lg" min="1" max="500">
+                                <p class="text-xs text-gray-500 mt-1">سيُطبق عند إعادة تعيين النظام</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">كلمة المرور</label>
+                                <input type="password" id="appPassword" value="9191" class="w-full p-3 border rounded-lg" maxlength="4">
+                                <p class="text-xs text-gray-500 mt-1">كلمة مرور الدخول للنظام</p>
+                            </div>
+                        </div>
+                        <button type="button" onclick="saveSettings()" class="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">💾 حفظ الإعدادات</button>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                        <div class="bg-blue-500 text-white p-4 rounded-lg">
+                            <p class="text-sm opacity-80">إجمالي الخزانات</p>
+                            <p class="text-2xl font-bold" id="statTotal">0</p>
+                        </div>
+                        <div class="bg-green-500 text-white p-4 rounded-lg">
+                            <p class="text-sm opacity-80">مُعدّة</p>
+                            <p class="text-2xl font-bold" id="statConfig">0</p>
+                        </div>
+                        <div class="bg-yellow-500 text-white p-4 rounded-lg">
+                            <p class="text-sm opacity-80">غير مُعدّة</p>
+                            <p class="text-2xl font-bold" id="statNoConfig">0</p>
+                        </div>
+                        <div class="bg-purple-500 text-white p-4 rounded-lg">
+                            <p class="text-sm opacity-80">قراءات</p>
+                            <p class="text-2xl font-bold" id="statRecs">0</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex gap-2 mb-4">
+                        <input type="text" id="configSearch" placeholder="?? بحث عن خزان..." class="flex-1 p-3 border rounded-lg" oninput="showConfig()">
+                        <button type="button" onclick="syncNow()" class="bg-purple-600 text-white px-4 py-3 rounded-lg hover:bg-purple-700">🔄 مزامنة</button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto" id="configGrid"></div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Tank Modal -->
+    <div id="tankModal" class="modal" onclick="handleModalClick(event, 'tankModal')">
+        <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4" onclick="event.stopPropagation()">
+            <h3 class="text-lg font-bold mb-4" id="modalTitle">خزان</h3>
+            <input type="hidden" id="modalTankId">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">الاسم *</label>
+                    <input type="text" id="modalTankName" class="w-full p-3 border rounded-lg">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">1 سم = ؟ م³ *</label>
+                    <input type="number" id="modalTankFactor" step="0.001" class="w-full p-3 border rounded-lg">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">المجموعة *</label>
+                    <select id="modalTankGroup" class="w-full p-3 border rounded-lg"></select>
+                </div>
+            </div>
+            <div class="flex gap-2 justify-end mt-6">
+                <button type="button" onclick="closeModal('tankModal')" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">إلغاء</button>
+                <button type="button" onclick="saveTank()" class="px-4 py-2 bg-blue-600 text-white rounded-lg">حفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Group Modal -->
+    <div id="groupModal" class="modal" onclick="handleModalClick(event, 'groupModal')">
+        <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4" onclick="event.stopPropagation()">
+            <h3 class="text-lg font-bold mb-4" id="groupModalTitle">مجموعة</h3>
+            <input type="hidden" id="modalGroupKey">
+            <input type="hidden" id="modalGroupAction">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">اسم المجموعة *</label>
+                    <input type="text" id="modalGroupName" class="w-full p-3 border rounded-lg">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">لون المجموعة</label>
+                    <input type="color" id="modalGroupColor" class="w-full h-12 border rounded-lg">
+                </div>
+            </div>
+            <div class="flex gap-2 justify-end mt-6">
+                <button type="button" onclick="closeModal('groupModal')" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">إلغاء</button>
+                <button type="button" onclick="saveGroup()" class="px-4 py-2 bg-blue-600 text-white rounded-lg">حفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Modal -->
+    <div id="deleteModal" class="modal" onclick="handleModalClick(event, 'deleteModal')">
+        <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4" onclick="event.stopPropagation()">
+            <h3 class="text-lg font-bold mb-4 text-red-600">⚠️ تأكيد الحذف</h3>
+            <p class="mb-4 text-gray-600" id="deleteText"></p>
+            <input type="hidden" id="deleteId">
+            <input type="hidden" id="deleteType">
+            <div class="flex gap-2 justify-end">
+                <button type="button" onclick="closeModal('deleteModal')" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">إلغاء</button>
+                <button type="button" onclick="doDelete()" class="px-4 py-2 bg-red-600 text-white rounded-lg">حذف</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-lg opacity-0 transition-opacity z-50">
+        <span id="toastText"></span>
+    </div>
+
+    <script>
+        // === إعدادات النظام ===
+        var APP_PASSWORD = '9191';
+        var DEFAULT_TANK_COUNT = 62;
+        var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby5PN6CQBNKJW3akInbHthx5jE_0E-KmpOC_n1nB3twl1XYLtIbmtq40hxl_zeZ7vQ8qw/exec';
+        
+        // === البيانات ===
+        var tanks = [];
+        var records = [];
+        var samples = [];
+        var groups = {};
+        var nextId = 1;
+        var groupList = [];
+        var isSyncing = false;
+
+        // === تهيئة المجموعات الافتراضية ===
+        function initGroups() {
+            groupList = [
+                {key:'naphtha', name:'نفتا', color:'#f59e0b'},
+                {key:'gasoline', name:'بنزين', color:'#10b981'},
+                {key:'mazut', name:'مازوت', color:'#7c3aed'},
+                {key:'kerosene', name:'كيروسين', color:'#3b82f6'},
+                {key:'jet', name:'كيروسين طيران', color:'#06b6d4'},
+                {key:'crude', name:'خام', color:'#1f2937'},
+                {key:'slop', name:'سلوب', color:'#84cc16'},
+                {key:'fuel', name:'فيول', color:'#dc2626'},
+                {key:'vgo', name:'VGO', color:'#6366f1'},
+                {key:'none', name:'بدون مجموعة', color:'#9ca3af'}
+            ];
+            groupList.forEach(function(g) {
+                groups[g.key] = {name: g.name, color: g.color};
+            });
+        }
+
+        // === شاشة الدخول ===
+        function checkPassword(e) {
+            if (e.key === 'Enter') checkLogin();
+        }
+
+        function checkLogin() {
+            var input = document.getElementById('passwordInput').value;
+            if (input === APP_PASSWORD) {
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('appContent').classList.add('active');
+                init();
+            } else {
+                document.getElementById('loginError').classList.remove('hidden');
+                document.getElementById('passwordInput').value = '';
+                document.getElementById('passwordInput').focus();
+            }
+        }
+
+        function logout() {
+            document.getElementById('loginScreen').classList.remove('hidden');
+            document.getElementById('appContent').classList.remove('active');
+            document.getElementById('passwordInput').value = '';
+            document.getElementById('loginError').classList.add('hidden');
+        }
+
+        // === التهيئة الرئيسية ===
+        function init() {
+            console.log('=== INIT START ===');
+            initGroups();
+            
+            // تحميل الإعدادات
+            var savedSettings = localStorage.getItem('appSettings_v1');
+            if (savedSettings) {
+                var settings = JSON.parse(savedSettings);
+                if (settings.password) APP_PASSWORD = settings.password;
+                if (settings.defaultTankCount) DEFAULT_TANK_COUNT = settings.defaultTankCount;
+            }
+            
+            // تحميل المجموعات المحفوظة
+            var savedGroups = localStorage.getItem('myGroups_v4');
+            if (savedGroups) {
+                var parsed = JSON.parse(savedGroups);
+                for (var i = 0; i < parsed.length; i++) {
+                    for (var j = 0; j < groupList.length; j++) {
+                        if (groupList[j].key === parsed[i].key) {
+                            groupList[j].name = parsed[i].name;
+                            groupList[j].color = parsed[i].color;
+                            groups[parsed[i].key] = {name: parsed[i].name, color: parsed[i].color};
+                        }
+                    }
+                }
+            }
+            
+            // تحميل الخزانات
+            var savedTanks = localStorage.getItem('myTanks_v4');
+            if (savedTanks) {
+                tanks = JSON.parse(savedTanks);
+                nextId = parseInt(localStorage.getItem('myNextId_v4') || '100');
+            } else {
+                tanks = [];
+                for (var i = 1; i <= DEFAULT_TANK_COUNT; i++) {
+                    tanks.push({id: i, name: 'خزان ' + i, factor: 1, configured: false, group: 'none'});
+                }
+                nextId = DEFAULT_TANK_COUNT + 1;
+                saveTanks();
+            }
+            
+            // تحميل القراءات
+            var savedRecs = localStorage.getItem('myRecords_v4');
+            records = savedRecs ? JSON.parse(savedRecs) : [];
+            
+            // تحميل العينات
+            var savedSamples = localStorage.getItem('mySamples_v1');
+            samples = savedSamples ? JSON.parse(savedSamples) : [];
+            
+            console.log('Tanks:', tanks.length, 'Records:', records.length, 'Samples:', samples.length);
+            
+            // التواريخ والوقت
+            var now = new Date();
+            document.getElementById('currentDate').textContent = now.toLocaleDateString('ar-EG', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+            
+            var todayStr = now.toISOString().slice(0, 10);
+            var timeStr = now.toTimeString().slice(0, 5);
+            
+            document.getElementById('entryDate').value = todayStr;
+            document.getElementById('entryTime').value = timeStr;
+            document.getElementById('sampleDate').value = todayStr;
+            document.getElementById('sampleTime').value = timeStr;
+            document.getElementById('reportMonth').value = todayStr.slice(0, 7);
+            document.getElementById('inventoryDate').value = todayStr;
+            document.getElementById('groupInventoryDate').value = todayStr;
+            
+            // بناء القوائم
+            buildTankDropdown();
+            buildSampleTankDropdown();
+            fillTankFilter();
+            showConfig();
+            showReport();
+            showSamples();
+            showInventory();
+            showGroupInventory();
+            showGroups();
+            updateStats();
+            fillGroupFilter();
+            
+            // إغلاق القائمة عند النقر خارجها
+            document.addEventListener('click', function(e) {
+                var wrapper = e.target.closest('.select-wrapper');
+                if (!wrapper) {
+                    var dropdowns = document.querySelectorAll('.select-dropdown');
+                    dropdowns.forEach(function(d) { d.classList.remove('visible'); });
+                }
+            });
+            
+            setSyncStatus('ok', '✅ متزامن');
+            console.log('=== INIT DONE ===');
+        }
+
+        function setSyncStatus(status, message) {
+            var el = document.getElementById('syncStatus');
+            if (!el) return;
+            el.className = 'sync-status sync-' + status + ' mt-1 inline-block';
+            el.textContent = message;
+        }
+
+        function saveSettings() {
+            var newPass = document.getElementById('appPassword').value;
+            var newCount = parseInt(document.getElementById('defaultTankCount').value) || 62;
+            
+            if (newPass.length >= 4) {
+                APP_PASSWORD = newPass;
+            }
+            DEFAULT_TANK_COUNT = newCount;
+            
+            localStorage.setItem('appSettings_v1', JSON.stringify({
+                password: APP_PASSWORD,
+                defaultTankCount: DEFAULT_TANK_COUNT
+            }));
+            
+            showToast('✅ تم حفظ الإعدادات');
+        }
+
+        function saveTanks() {
+            localStorage.setItem('myTanks_v4', JSON.stringify(tanks));
+            localStorage.setItem('myNextId_v4', nextId.toString());
+        }
+
+        function saveRecords() {
+            localStorage.setItem('myRecords_v4', JSON.stringify(records));
+        }
+
+        function saveSamples() {
+            localStorage.setItem('mySamples_v1', JSON.stringify(samples));
+        }
+
+        function saveGroupsData() {
+            localStorage.setItem('myGroups_v4', JSON.stringify(groupList));
+        }
+
+        // === التبويب ===
+        function goTab(tab) {
+            var tabs = ['entry', 'samples', 'report', 'inventory', 'group-inventory', 'groups', 'config'];
+            tabs.forEach(function(t) {
+                document.getElementById('tab-' + t).classList.toggle('hidden', t !== tab);
+                document.getElementById('btn-' + t).classList.toggle('tab-active', t === tab);
+                document.getElementById('btn-' + t).classList.toggle('tab-inactive', t !== tab);
+            });
+            if (tab === 'config') showConfig();
+            if (tab === 'report') { showReport(); fillTankFilter(); }
+            if (tab === 'inventory') { showInventory(); fillGroupFilter(); }
+            if (tab === 'group-inventory') showGroupInventory();
+            if (tab === 'groups') showGroups();
+            if (tab === 'entry') buildTankDropdown();
+            if (tab === 'samples') { buildSampleTankDropdown(); showSamples(); }
+        }
+
+        // === قائمة الخزانات ===
+        function buildTankDropdown() {
+            var list = document.getElementById('tankList');
+            if (!list) return;
+            list.innerHTML = '';
+            tanks.forEach(function(t) {
+                var div = document.createElement('div');
+                div.className = 'select-option';
+                div.setAttribute('data-id', String(t.id));
+                div.setAttribute('data-name', t.name);
+                div.innerHTML = '<div class="flex justify-between items-center">' +
+                    '<span>' + (t.configured ? '✓' : '⚠️') + ' ' + t.name + '</span>' +
+                    '<span class="group-badge" style="background:' + groups[t.group].color + '33; color:' + groups[t.group].color + '">' + groups[t.group].name + '</span>' +
+                    '</div>';
+                div.onclick = function() { pickTank(String(t.id), t.name); };
+                list.appendChild(div);
+            });
+        }
+
+        function buildSampleTankDropdown() {
+            var list = document.getElementById('sampleTankList');
+            if (!list) return;
+            list.innerHTML = '';
+            tanks.forEach(function(t) {
+                var div = document.createElement('div');
+                div.className = 'select-option';
+                div.setAttribute('data-id', String(t.id));
+                div.setAttribute('data-name', t.name);
+                div.innerHTML = '<span>' + t.name + ' <span class="group-badge" style="background:' + groups[t.group].color + '33; color:' + groups[t.group].color + '">' + groups[t.group].name + '</span></span>';
+                div.onclick = function() { pickSampleTank(String(t.id), t.name); };
+                list.appendChild(div);
+            });
+        }
+
+        function toggleTankList() {
+            var list = document.getElementById('tankList');
+            if (list) {
+                var isVisible = list.classList.contains('visible');
+                if (isVisible) { list.classList.remove('visible'); }
+                else { buildTankDropdown(); list.classList.add('visible'); filterTankList(); }
+            }
+        }
+
+        function toggleSampleTankList() {
+            var list = document.getElementById('sampleTankList');
+            if (list) {
+                var isVisible = list.classList.contains('visible');
+                if (isVisible) { list.classList.remove('visible'); }
+                else { buildSampleTankDropdown(); list.classList.add('visible'); filterSampleTankList(); }
+            }
+        }
+
+        function filterTankList() {
+            var input = document.getElementById('tankSelect');
+            var list = document.getElementById('tankList');
+            if (!input || !list) return;
+            var search = input.value.toLowerCase().trim();
+            var options = list.getElementsByClassName('select-option');
+            var visible = 0;
+            options.forEach(function(opt) {
+                var name = opt.getAttribute('data-name');
+                var id = opt.getAttribute('data-id');
+                var match = name.toLowerCase().indexOf(search) !== -1 || id.indexOf(search) !== -1;
+                opt.style.display = match ? 'block' : 'none';
+                if (match) visible++;
+            });
+            var oldMsg = list.querySelector('.no-results');
+            if (oldMsg) oldMsg.remove();
+            if (visible === 0 && search.length > 0) {
+                var msg = document.createElement('div');
+                msg.className = 'no-results';
+                msg.textContent = 'لا توجد خزانات مطابقة';
+                list.appendChild(msg);
+            }
+        }
+
+        function filterSampleTankList() {
+            var input = document.getElementById('sampleTankSelect');
+            var list = document.getElementById('sampleTankList');
+            if (!input || !list) return;
+            var search = input.value.toLowerCase().trim();
+            var options = list.getElementsByClassName('select-option');
+            var visible = 0;
+            options.forEach(function(opt) {
+                var name = opt.getAttribute('data-name');
+                var id = opt.getAttribute('data-id');
+                var match = name.toLowerCase().indexOf(search) !== -1 || id.indexOf(search) !== -1;
+                opt.style.display = match ? 'block' : 'none';
+                if (match) visible++;
+            });
+        }
+
+        function pickTank(id, name) {
+            document.getElementById('tankSelect').value = name;
+            document.getElementById('tankIdHidden').value = id;
+            document.getElementById('tankList').classList.remove('visible');
+            showTankInfo();
+        }
+
+        function pickSampleTank(id, name) {
+            document.getElementById('sampleTankSelect').value = name;
+            document.getElementById('sampleTankIdHidden').value = id;
+            document.getElementById('sampleTankList').classList.remove('visible');
+        }
+
+        function showTankInfo() {
+            var id = document.getElementById('tankIdHidden').value;
+            var info = document.getElementById('tankInfo');
+            var tank = getTank(id);
+            if (!tank || !info) { if (info) info.innerHTML = ''; return; }
+            info.innerHTML = '<span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs">📊 1 سم = ' + tank.factor.toFixed(3) + ' م³</span>' +
+                '<span class="px-3 py-1 rounded-full text-xs" style="background:' + groups[tank.group].color + '33; color:' + groups[tank.group].color + '">' + groups[tank.group].name + '</span>';
+            calcVol();
+        }
+
+        function calcVol() {
+            var id = document.getElementById('tankIdHidden').value;
+            var level = parseFloat(document.getElementById('entryLevel').value) || 0;
+            var tank = getTank(id);
+            var vol = tank ? (level * tank.factor).toFixed(3) : '0.000';
+            document.getElementById('volDisplay').textContent = vol + ' م³';
+        }
+
+        function getTank(id) {
+            var idStr = String(id);
+            for (var i = 0; i < tanks.length; i++) { if (String(tanks[i].id) === idStr) return tanks[i]; }
+            return null;
+        }
+
+        function getTankIndex(id) {
+            var idStr = String(id);
+            for (var i = 0; i < tanks.length; i++) { if (String(tanks[i].id) === idStr) return i; }
+            return -1;
+        }
+
+        // === حفظ قياس ===
+        function saveRec() {
+            var id = document.getElementById('tankIdHidden').value;
+            var date = document.getElementById('entryDate').value;
+            var time = document.getElementById('entryTime').value;
+            var level = parseFloat(document.getElementById('entryLevel').value) || 0;
+            var water = parseFloat(document.getElementById('entryWater').value) || 0;
+            
+            if (!id || !date || level <= 0) { showToast('⚠️ أكمل البيانات'); return; }
+            var tank = getTank(id);
+            if (!tank) { showToast('⚠️ اختر خزان'); return; }
+            
+            records.push({
+                id: Date.now(),
+                tankId: parseInt(id),
+                tankName: tank.name,
+                group: tank.group,
+                date: date,
+                time: time,
+                level: level,
+                water: water,
+                volume: parseFloat((level * tank.factor).toFixed(3))
+            });
+            records.sort(function(a, b) { return new Date(b.date + 'T' + b.time) - new Date(a.date + 'T' + a.time); });
+            saveRecords();
+            
+            document.getElementById('entryLevel').value = '';
+            document.getElementById('entryWater').value = '';
+            document.getElementById('volDisplay').textContent = '0.000 م³';
+            showToast('✅ تم الحفظ بنجاح');
+            updateStats();
+        }
+
+        // === حفظ عينة ===
+        function saveSample() {
+            var id = document.getElementById('sampleTankIdHidden').value;
+            var date = document.getElementById('sampleDate').value;
+            var time = document.getElementById('sampleTime').value;
+            var notes = document.getElementById('sampleNotes').value.trim();
+            
+            if (!id || !date || !time) { showToast('⚠️ أكمل بيانات العينة'); return; }
+            var tank = getTank(id);
+            if (!tank) { showToast('⚠️ اختر خزان'); return; }
+            
+            samples.push({
+                id: Date.now(),
+                tankId: parseInt(id),
+                tankName: tank.name,
+                group: tank.group,
+                date: date,
+                time: time,
+                notes: notes
+            });
+            samples.sort(function(a, b) { return new Date(b.date + 'T' + b.time) - new Date(a.date + 'T' + a.time); });
+            saveSamples();
+            
+            document.getElementById('sampleNotes').value = '';
+            showToast('✅ تم تسجيل العينة');
+            showSamples();
+        }
+
+        function showSamples() {
+            var body = document.getElementById('samplesBody');
+            if (!body) return;
+            body.innerHTML = '';
+            
+            var recent = samples.slice(0, 20);
+            if (recent.length === 0) {
+                body.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-400">📭 لا توجد عينات</td></tr>';
+                return;
+            }
+            
+            recent.forEach(function(s) {
+                body.innerHTML += '<tr class="border-b hover:bg-gray-50">' +
+                    '<td class="p-2">' + s.date + '</td>' +
+                    '<td class="p-2">' + s.time + '</td>' +
+                    '<td class="p-2">' + s.tankName + '</td>' +
+                    '<td class="p-2 text-gray-500">' + (s.notes || '-') + '</td>' +
+                    '<td class="p-2"><button type="button" onclick="deleteSample(' + s.id + ')" class="text-red-600 hover:text-red-800">حذف</button></td>' +
+                    '</tr>';
+            });
+        }
+
+        function deleteSample(id) {
+            if (!confirm('حذف هذه العينة؟')) return;
+            samples = samples.filter(function(s) { return s.id !== id; });
+            saveSamples();
+            showSamples();
+            showToast('✅ تم حذف العينة');
+        }
+
+        // === إعدادات الخزانات ===
+        function openAddTank() {
+            document.getElementById('modalTankId').value = '';
+            document.getElementById('modalTankName').value = '';
+            document.getElementById('modalTankFactor').value = '';
+            document.getElementById('modalTitle').textContent = 'إضافة خزان';
+            fillGroupSelect('modalTankGroup', 'none');
+            document.getElementById('tankModal').classList.add('active');
+        }
+
+        function openEditTank(id) {
+            var tank = getTank(id);
+            if (!tank) { showToast('⚠️ الخزان غير موجود'); return; }
+            document.getElementById('modalTankId').value = String(tank.id);
+            document.getElementById('modalTankName').value = tank.name;
+            document.getElementById('modalTankFactor').value = tank.factor;
+            document.getElementById('modalTitle').textContent = 'تعديل خزان';
+            fillGroupSelect('modalTankGroup', tank.group);
+            document.getElementById('tankModal').classList.add('active');
+        }
+
+        function fillGroupSelect(selectId, selected) {
+            var sel = document.getElementById(selectId);
+            if (!sel) return;
+            sel.innerHTML = '';
+            groupList.forEach(function(g) {
+                var opt = document.createElement('option');
+                opt.value = g.key;
+                opt.textContent = g.name;
+                if (g.key === selected) opt.selected = true;
+                sel.appendChild(opt);
+            });
+        }
+
+        function saveTank() {
+            var idStr = document.getElementById('modalTankId').value;
+            var name = document.getElementById('modalTankName').value.trim();
+            var factor = parseFloat(document.getElementById('modalTankFactor').value) || 0;
+            var group = document.getElementById('modalTankGroup').value;
+            
+            if (!name) { showToast('⚠️ أدخل الاسم'); return; }
+            if (factor <= 0) { showToast('⚠️ أدخل المعامل'); return; }
+            
+            if (idStr && idStr !== '') {
+                var idx = getTankIndex(idStr);
+                if (idx >= 0) {
+                    tanks[idx].name = name; tanks[idx].factor = factor; tanks[idx].group = group; tanks[idx].configured = true;
+                    showToast('✅ تم التعديل');
+                } else { showToast('⚠️ الخزان غير موجود'); return; }
+            } else {
+                tanks.push({id: nextId, name: name, factor: factor, configured: true, group: group});
+                nextId++;
+                showToast('✅ تمت الإضافة');
+            }
+            saveTanks();
+            closeModal('tankModal');
+            buildTankDropdown();
+            buildSampleTankDropdown();
+            showConfig();
+            fillTankFilter();
+            updateStats();
+        }
+
+        function showConfig() {
+            var search = document.getElementById('configSearch').value.toLowerCase();
+            var grid = document.getElementById('configGrid');
+            if (!grid) return;
+            grid.innerHTML = '';
+            var configured = 0;
+            tanks.forEach(function(t) {
+                if (t.configured) configured++;
+                if (search && t.name.toLowerCase().indexOf(search) === -1 && String(t.id).indexOf(search) === -1) return;
+                var card = document.createElement('div');
+                card.className = 'p-4 border rounded-lg bg-white ' + (t.configured ? 'border-green-500 border-r-4' : 'border-yellow-500 border-r-4');
+                var escapedName = t.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                card.innerHTML = '<div class="flex justify-between mb-2"><span class="font-bold">' + t.name + '</span>' +
+                    '<span class="text-xs ' + (t.configured ? 'text-green-600' : 'text-yellow-600') + '">' + (t.configured ? '✓' : '⚠️') + '</span></div>' +
+                    '<p class="text-sm text-gray-500 mb-2">1 سم = ' + t.factor.toFixed(3) + ' م³</p>' +
+                    '<span class="group-badge mb-3" style="background:' + groups[t.group].color + '33; color:' + groups[t.group].color + '">' + groups[t.group].name + '</span>' +
+                    '<div class="flex gap-2"><button type="button" onclick="openEditTank(' + t.id + ')" class="flex-1 bg-blue-50 text-blue-600 py-2 rounded text-sm">تعديل</button>' +
+                    '<button type="button" onclick="openDelete(' + t.id + ', \'' + escapedName + '\', \'tank\')" class="flex-1 bg-red-50 text-red-600 py-2 rounded text-sm">حذف</button></div>';
+                grid.appendChild(card);
+            });
+            document.getElementById('statTotal').textContent = String(tanks.length);
+            document.getElementById('statConfig').textContent = String(configured);
+            document.getElementById('statNoConfig').textContent = String(tanks.length - configured);
+        }
+
+        // === إدارة المجموعات ===
+        function openAddGroup() {
+            document.getElementById('modalGroupKey').value = '';
+            document.getElementById('modalGroupName').value = '';
+            document.getElementById('modalGroupColor').value = '#3b82f6';
+            document.getElementById('modalGroupAction').value = 'add';
+            document.getElementById('groupModalTitle').textContent = 'إضافة مجموعة جديدة';
+            document.getElementById('groupModal').classList.add('active');
+        }
+
+        function openEditGroup(key) {
+            var g = null;
+            for (var i = 0; i < groupList.length; i++) { if (groupList[i].key === key) { g = groupList[i]; break; } }
+            if (!g) return;
+            if (key === 'none') { showToast('⚠️ لا يمكن تعديل المجموعة الافتراضية'); return; }
+            
+            document.getElementById('modalGroupKey').value = key;
+            document.getElementById('modalGroupName').value = g.name;
+            document.getElementById('modalGroupColor').value = g.color;
+            document.getElementById('modalGroupAction').value = 'edit';
+            document.getElementById('groupModalTitle').textContent = 'تعديل المجموعة';
+            document.getElementById('groupModal').classList.add('active');
+        }
+
+        function openDeleteGroup(key, name) {
+            if (key === 'none') { showToast('⚠️ لا يمكن حذف المجموعة الافتراضية'); return; }
+            document.getElementById('deleteId').value = key;
+            document.getElementById('deleteType').value = 'group';
+            document.getElementById('deleteText').textContent = 'حذف مجموعة "' + name + '"؟ سيتم نقل الخزانات إلى "بدون مجموعة".';
+            document.getElementById('deleteModal').classList.add('active');
+        }
+
+        function saveGroup() {
+            var key = document.getElementById('modalGroupKey').value;
+            var name = document.getElementById('modalGroupName').value.trim();
+            var color = document.getElementById('modalGroupColor').value;
+            var action = document.getElementById('modalGroupAction').value;
+            
+            if (!name) { showToast('⚠️ أدخل اسم المجموعة'); return; }
+            
+            if (action === 'add') {
+                var newKey = 'custom_' + Date.now();
+                groupList.push({key: newKey, name: name, color: color});
+                groups[newKey] = {name: name, color: color};
+                showToast('✅ تمت إضافة المجموعة');
+            } else {
+                for (var i = 0; i < groupList.length; i++) {
+                    if (groupList[i].key === key) {
+                        groupList[i].name = name;
+                        groupList[i].color = color;
+                        groups[key].name = name;
+                        groups[key].color = color;
+                        break;
+                    }
+                }
+                showToast('✅ تم تعديل المجموعة');
+            }
+            
+            saveGroupsData();
+            closeModal('groupModal');
+            showGroups();
+            buildTankDropdown();
+            buildSampleTankDropdown();
+            showReport();
+            fillGroupFilter();
+            showToast('✅ تم الحفظ');
+        }
+
+        function showGroups() {
+            var grid = document.getElementById('groupsGrid');
+            if (!grid) return;
+            grid.innerHTML = '';
+            
+            groupList.forEach(function(g) {
+                var count = 0;
+                for (var i = 0; i < tanks.length; i++) { if (tanks[i].group === g.key) count++; }
+                
+                var card = document.createElement('div');
+                card.className = 'p-4 rounded-lg border-2 bg-white hover:shadow-md';
+                card.style.borderColor = g.color;
+                
+                var actions = '';
+                if (g.key !== 'none') {
+                    actions = '<div class="flex gap-1 mt-3">' +
+                        '<button type="button" onclick="openEditGroup(\'' + g.key + '\')" class="flex-1 bg-blue-50 text-blue-600 py-1.5 rounded text-xs">✏️ تعديل</button>' +
+                        '<button type="button" onclick="openDeleteGroup(\'' + g.key + '\', \'' + g.name.replace(/'/g, "\\'") + '\')" class="flex-1 bg-red-50 text-red-600 py-1.5 rounded text-xs">🗑️ حذف</button>' +
+                        '</div>';
+                } else {
+                    actions = '<p class="text-xs text-gray-400 mt-3">المجموعة الافتراضية</p>';
+                }
+                
+                card.innerHTML = '<div class="flex justify-between items-center mb-2">' +
+                    '<div class="flex items-center gap-2">' +
+                    '<div class="w-4 h-4 rounded-full" style="background:' + g.color + '"></div>' +
+                    '<span class="font-bold" style="color:' + g.color + '">' + g.name + '</span>' +
+                    '</div>' +
+                    '<span class="text-lg font-bold">' + count + '</span>' +
+                    '</div>' +
+                    '<p class="text-sm text-gray-500">خزان</p>' +
+                    actions;
+                grid.appendChild(card);
+            });
+        }
+
+        function fillGroupFilter() {
+            var sels = ['reportGroup', 'inventoryGroup'];
+            sels.forEach(function(selId) {
+                var sel = document.getElementById(selId);
+                if (!sel) return;
+                sel.innerHTML = '<option value="all">الكل</option>';
+                groupList.forEach(function(g) { if (g.key !== 'none') { sel.innerHTML += '<option value="' + g.key + '">' + g.name + '</option>'; } });
+            });
+        }
+
+        function fillTankFilter() {
+            var sel = document.getElementById('reportTank');
+            if (!sel) return;
+            sel.innerHTML = '<option value="all">الكل</option>';
+            tanks.forEach(function(t) { sel.innerHTML += '<option value="' + t.id + '">' + t.name + '</option>'; });
+        }
+
+        // === التقرير الشهري ===
+        function showReport() {
+            var month = document.getElementById('reportMonth').value;
+            var groupFilter = document.getElementById('reportGroup').value;
+            var tankFilter = document.getElementById('reportTank').value;
+            var body = document.getElementById('reportBody');
+            if (!body) return;
+            body.innerHTML = '';
+            
+            var filtered = [];
+            for (var i = 0; i < records.length; i++) {
+                var r = records[i];
+                var matchMonth = r.date.indexOf(month) === 0;
+                var matchGroup = groupFilter === 'all' || r.group === groupFilter;
+                var matchTank = tankFilter === 'all' || String(r.tankId) === tankFilter;
+                if (matchMonth && matchGroup && matchTank) filtered.push(r);
+            }
+            
+            if (filtered.length === 0) { body.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-gray-400">📭 لا توجد بيانات</td></tr>'; return; }
+            
+            for (var i = 0; i < filtered.length; i++) {
+                var r = filtered[i];
+                var water = r.water > 0 ? '<span class="text-blue-600">' + r.water.toFixed(2) + '</span>' : '-';
+                body.innerHTML += '<tr class="border-b hover:bg-gray-50"><td class="p-3">' + r.date + '</td><td class="p-3">' + r.time + '</td><td class="p-3">' + r.tankName + '</td>' +
+                    '<td class="p-3"><span class="group-badge" style="background:' + groups[r.group].color + '33; color:' + groups[r.group].color + '">' + groups[r.group].name + '</span></td>' +
+                    '<td class="p-3">' + r.level.toFixed(2) + '</td><td class="p-3">' + water + '</td>' +
+                    '<td class="p-3 font-bold text-blue-600">' + r.volume.toFixed(3) + '</td>' +
+                    '<td class="p-3"><button type="button" onclick="openDelete(' + r.id + ', \'هذا السجل\', \'record\')" class="text-red-600 hover:text-red-800">حذف</button></td></tr>';
+            }
+        }
+
+        // === تقرير الجرد ===
+        function showInventory() {
+            var inventoryDate = document.getElementById('inventoryDate').value;
+            var groupFilter = document.getElementById('inventoryGroup').value;
+            var body = document.getElementById('inventoryBody');
+            if (!body) return;
+            body.innerHTML = '';
+            
+            var hasData = false;
+            for (var i = 0; i < tanks.length; i++) {
+                var t = tanks[i];
+                if (groupFilter !== 'all' && t.group !== groupFilter) continue;
+                
+                var lastRec = null;
+                for (var j = 0; j < records.length; j++) {
+                    var r = records[j];
+                    if (r.tankId === t.id && r.date <= inventoryDate) { lastRec = r; break; }
+                }
+                
+                hasData = true;
+                var water = lastRec && lastRec.water > 0 ? '<span class="text-blue-600">' + lastRec.water.toFixed(2) + '</span>' : '-';
+                var dateDisplay = lastRec ? lastRec.date : '<span class="text-gray-400">لا توجد قراءة</span>';
+                var timeDisplay = lastRec && lastRec.time ? lastRec.time : '-';
+                var levelDisplay = lastRec ? lastRec.level.toFixed(2) : '-';
+                var volDisplay = lastRec ? lastRec.volume.toFixed(3) : '-';
+                
+                body.innerHTML += '<tr class="border-b hover:bg-gray-50"><td class="p-3 font-medium">' + t.name + '</td>' +
+                    '<td class="p-3"><span class="group-badge" style="background:' + groups[t.group].color + '33; color:' + groups[t.group].color + '">' + groups[t.group].name + '</span></td>' +
+                    '<td class="p-3">' + dateDisplay + '</td><td class="p-3">' + timeDisplay + '</td>' +
+                    '<td class="p-3">' + levelDisplay + '</td><td class="p-3">' + water + '</td>' +
+                    '<td class="p-3 font-bold text-blue-600">' + volDisplay + '</td></tr>';
+            }
+            if (!hasData) body.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-gray-400">📭 لا توجد خزانات</td></tr>';
+        }
+
+        // === جرد المجموعات ===
+        function showGroupInventory() {
+            var inventoryDate = document.getElementById('groupInventoryDate').value;
+            var summaryDiv = document.getElementById('groupInventorySummary');
+            var detailsDiv = document.getElementById('groupInventoryDetails');
+            if (!summaryDiv || !detailsDiv) return;
+            summaryDiv.innerHTML = '';
+            detailsDiv.innerHTML = '';
+            
+            var tankLastReadings = {};
+            for (var i = 0; i < tanks.length; i++) {
+                var t = tanks[i];
+                if (t.group === 'none') continue;
+                var lastRec = null;
+                for (var j = 0; j < records.length; j++) { var r = records[j]; if (r.tankId === t.id && r.date <= inventoryDate) { lastRec = r; break; } }
+                tankLastReadings[t.id] = {tank: t, reading: lastRec};
+            }
+            
+            var groupData = {};
+            groupList.forEach(function(g) { if (g.key !== 'none') { groupData[g.key] = {key: g.key, name: g.name, color: g.color, tanks: [], totalVolume: 0, totalWaterCm: 0, totalWaterVol: 0}; } });
+            
+            for (var id in tankLastReadings) {
+                var item = tankLastReadings[id];
+                var t = item.tank; var r = item.reading; var gd = groupData[t.group];
+                if (gd) {
+                    gd.tanks.push({tank: t, reading: r});
+                    if (r) { gd.totalVolume += r.volume; gd.totalWaterCm += r.water || 0; gd.totalWaterVol += (r.water || 0) * t.factor; }
+                }
+            }
+            
+            var hasSummaryData = false;
+            for (var key in groupData) {
+                var gd = groupData[key];
+                if (gd.tanks.length > 0) {
+                    hasSummaryData = true;
+                    var card = document.createElement('div');
+                    card.className = 'p-4 rounded-lg border-2 bg-white';
+                    card.style.borderColor = gd.color;
+                    card.innerHTML = '<div class="flex justify-between items-center mb-2"><h3 class="font-bold text-lg" style="color:' + gd.color + '">' + gd.name + '</h3>' +
+                        '<span class="text-sm text-gray-500">' + gd.tanks.length + ' خزان</span></div>' +
+                        '<div class="grid grid-cols-2 gap-2 text-sm"><div class="bg-gray-50 p-2 rounded"><p class="text-gray-500 text-xs">الحجم الكلي</p>' +
+                        '<p class="font-bold text-lg" style="color:' + gd.color + '">' + gd.totalVolume.toFixed(3) + ' م³</p></div>' +
+                        '<div class="bg-blue-50 p-2 rounded"><p class="text-gray-500 text-xs">الماء الكلي</p>' +
+                        '<p class="font-bold text-lg text-blue-600">' + gd.totalWaterCm.toFixed(2) + ' سم</p>' +
+                        '<p class="text-xs text-blue-500">(' + gd.totalWaterVol.toFixed(3) + ' م³)</p></div></div>';
+                    summaryDiv.appendChild(card);
+                }
+            }
+            if (!hasSummaryData) summaryDiv.innerHTML = '<div class="col-span-full text-center py-8 text-gray-400">📭 لا توجد بيانات</div>';
+            
+            for (var key in groupData) {
+                var gd = groupData[key];
+                if (gd.tanks.length === 0) continue;
+                var detailCard = document.createElement('div');
+                detailCard.className = 'bg-gray-50 rounded-lg border border-gray-200 p-4';
+                var tanksHtml = '';
+                for (var i = 0; i < gd.tanks.length; i++) {
+                    var item = gd.tanks[i]; var t = item.tank; var r = item.reading;
+                    var waterDisplay = r && r.water > 0 ? '<span class="text-blue-600 text-xs">💧 ' + r.water.toFixed(2) + ' سم</span>' : '<span class="text-gray-400 text-xs">-</span>';
+                    var dateDisplay = r ? r.date + ' ' + (r.time || '') : '<span class="text-gray-400">لا توجد قراءة</span>';
+                    tanksHtml += '<div class="flex justify-between items-center py-2 border-b last:border-0"><div>' +
+                        '<p class="font-medium text-gray-700">' + t.name + '</p><p class="text-xs text-gray-500">' + dateDisplay + '</p>' + waterDisplay + '</div>' +
+                        '<div class="text-left"><p class="font-bold" style="color:' + gd.color + '">' + (r ? r.volume.toFixed(3) : '0.000') + ' م³</p>' +
+                        '<p class="text-xs text-gray-500">' + (r ? r.level.toFixed(2) : '0') + ' سم</p></div></div>';
+                }
+                detailCard.innerHTML = '<div class="flex justify-between items-center mb-3 pb-2 border-b-2" style="border-color:' + gd.color + '">' +
+                    '<h4 class="font-bold text-lg" style="color:' + gd.color + '">' + gd.name + '</h4>' +
+                    '<div class="text-left"><p class="text-xl font-bold" style="color:' + gd.color + '">' + gd.totalVolume.toFixed(3) + ' م³</p>' +
+                    '<p class="text-xs text-blue-600">💧 ' + gd.totalWaterCm.toFixed(2) + ' سم</p></div></div>' +
+                    '<div class="space-y-1">' + tanksHtml + '</div>';
+                detailsDiv.appendChild(detailCard);
+            }
+            if (detailsDiv.innerHTML === '') detailsDiv.innerHTML = '<div class="text-center py-8 text-gray-400">📭 لا توجد مجموعات</div>';
+        }
+
+        // === حذف ===
+        function openDelete(id, name, type) {
+            document.getElementById('deleteId').value = String(id);
+            document.getElementById('deleteType').value = type;
+            if (type === 'tank') {
+                var recCount = 0; var idNum = parseInt(id);
+                for (var i = 0; i < records.length; i++) { if (records[i].tankId === idNum) recCount++; }
+                document.getElementById('deleteText').textContent = 'حذف "' + name + '" وجميع قراءاته (' + recCount + ' قراءة)؟';
+            } else if (type === 'record') {
+                document.getElementById('deleteText').textContent = 'حذف هذا السجل؟';
+            } else {
+                document.getElementById('deleteText').textContent = 'حذف ' + name + '؟';
+            }
+            document.getElementById('deleteModal').classList.add('active');
+        }
+
+        function doDelete() {
+            var idStr = document.getElementById('deleteId').value;
+            var type = document.getElementById('deleteType').value;
+            
+            if (type === 'tank') {
+                var tankId = parseInt(idStr);
+                var beforeCount = records.length;
+                records = records.filter(function(r) { return r.tankId !== tankId; });
+                tanks = tanks.filter(function(t) { return t.id !== tankId; });
+                saveTanks(); saveRecords();
+                closeModal('deleteModal');
+                buildTankDropdown(); buildSampleTankDropdown();
+                showConfig(); showGroups(); fillTankFilter(); updateStats();
+                showToast('✅ حذف الخزان (' + (beforeCount - records.length) + ' قراءة)');
+            } else if (type === 'record') {
+                var recId = parseInt(idStr);
+                records = records.filter(function(r) { return r.id !== recId; });
+                saveRecords();
+                closeModal('deleteModal');
+                showReport(); updateStats();
+                showToast('✅ تم حذف السجل');
+            } else if (type === 'group') {
+                var groupKey = idStr;
+                tanks.forEach(function(t) { if (t.group === groupKey) t.group = 'none'; });
+                records.forEach(function(r) { if (r.group === groupKey) r.group = 'none'; });
+                groupList = groupList.filter(function(g) { return g.key !== groupKey; });
+                delete groups[groupKey];
+                saveTanks(); saveRecords(); saveGroupsData();
+                closeModal('deleteModal');
+                showGroups(); buildTankDropdown(); buildSampleTankDropdown(); showReport(); fillGroupFilter();
+                showToast('✅ تم حذف المجموعة');
+            }
+        }
+
+        // === نوافذ ===
+        function closeModal(modalId) { var modal = document.getElementById(modalId); if (modal) modal.classList.remove('active'); }
+        function handleModalClick(event, modalId) { if (event.target === document.getElementById(modalId)) closeModal(modalId); }
+        
+        function updateStats() {
+            var configured = 0;
+            for (var i = 0; i < tanks.length; i++) { if (tanks[i].configured) configured++; }
+            document.getElementById('statTotal').textContent = String(tanks.length);
+            document.getElementById('statConfig').textContent = String(configured);
+            document.getElementById('statNoConfig').textContent = String(tanks.length - configured);
+            document.getElementById('statRecs').textContent = String(records.length);
+        }
+
+        function showToast(msg) {
+            var t = document.getElementById('toast');
+            var txt = document.getElementById('toastText');
+            if (t && txt) {
+                txt.textContent = msg;
+                t.style.opacity = '1';
+                setTimeout(function() { t.style.opacity = '0'; }, 2500);
+            }
+        }
+
+        // === النسخ الاحتياطي والاستعادة (NEW) ===
+        function exportBackup() {
+            var backupData = {
+                version: '1.0',
+                exportDate: new Date().toISOString(),
+                settings: {
+                    password: APP_PASSWORD,
+                    defaultTankCount: DEFAULT_TANK_COUNT
+                },
+                tanks: tanks,
+                records: records,
+                samples: samples,
+                groups: groupList,
+                nextId: nextId
+            };
+            
+            var blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'نسخة_احتياطية_الخزانات_' + new Date().toISOString().slice(0,10) + '.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showToast('✅ تم تحميل النسخة الاحتياطية');
+        }
+
+        function importBackup(event) {
+            var file = event.target.files[0];
+            if (!file) return;
+            
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    var backupData = JSON.parse(e.target.result);
+                    
+                    if (!backupData.tanks || !backupData.records) {
+                        throw new Error('ملف غير صالح');
+                    }
+                    
+                    if (!confirm('⚠️ تحذير: استعادة النسخة الاحتياطية سيستبدل ALL البيانات الحالية!\n\nهل أنت متأكد تماماً؟')) {
+                        event.target.value = '';
+                        return;
+                    }
+                    
+                    // استعادة البيانات
+                    if (backupData.settings) {
+                        if (backupData.settings.password) APP_PASSWORD = backupData.settings.password;
+                        if (backupData.settings.defaultTankCount) DEFAULT_TANK_COUNT = backupData.settings.defaultTankCount;
+                    }
+                    
+                    tanks = backupData.tanks || [];
+                    records = backupData.records || [];
+                    samples = backupData.samples || [];
+                    groupList = backupData.groups || [];
+                    nextId = backupData.nextId || 100;
+                    
+                    // إعادة بناء groups object
+                    groups = {};
+                    groupList.forEach(function(g) {
+                        groups[g.key] = {name: g.name, color: g.color};
+                    });
+                    
+                    // حفظ كل شيء
+                    saveTanks();
+                    saveRecords();
+                    saveSamples();
+                    saveGroupsData();
+                    localStorage.setItem('appSettings_v1', JSON.stringify({
+                        password: APP_PASSWORD,
+                        defaultTankCount: DEFAULT_TANK_COUNT
+                    }));
+                    
+                    // إعادة التهيئة
+                    init();
+                    
+                    showToast('✅ تم استعادة النسخة الاحتياطية بنجاح');
+                    
+                } catch (err) {
+                    showToast('❌ خطأ في قراءة الملف: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        // === تصدير PDF ===
+        function exportReportPDF() {
+            if (typeof window.jspdf === 'undefined') {
+                showToast('⚠️ جاري تحميل مكتبة PDF...');
+                setTimeout(exportReportPDF, 1000);
+                return;
+            }
+            const { jsPDF } = window.jspdf;
+            var doc = new jsPDF({direction: 'rtl'});
+            
+            doc.setFont('Tajawal', 'bold');
+            doc.text('تقرير القياسات الشهري', 105, 15, {align: 'center'});
+            doc.setFontSize(10);
+            doc.text('تاريخ التقرير: ' + new Date().toLocaleDateString('ar-EG'), 105, 22, {align: 'center'});
+            
+            var tableData = [];
+            var rows = document.querySelectorAll('#reportBody tr');
+            rows.forEach(function(row) {
+                var cells = row.querySelectorAll('td');
+                if (cells.length > 0) {
+                    var rowData = [];
+                    cells.forEach(function(cell, idx) {
+                        if (idx < 6) rowData.push(cell.textContent.trim());
+                    });
+                    if (rowData.length > 0) tableData.push(rowData);
+                }
+            });
+            
+            doc.autoTable({
+                head: [['التاريخ', 'الوقت', 'الخزان', 'المجموعة', 'سم', '💧', 'م³']],
+                body: tableData,
+                startY: 30,
+                theme: 'grid',
+                styles: {font: 'Tajawal', fontSize: 8},
+                headStyles: {fillColor: [37, 99, 235]}
+            });
+            
+            doc.save('تقرير_القياسات_' + new Date().toISOString().slice(0,10) + '.pdf');
+            showToast('✅ تم تصدير التقرير');
+        }
+
+        function exportInventoryPDF() {
+            if (typeof window.jspdf === 'undefined') { showToast('⚠️ جاري التحميل...'); setTimeout(exportInventoryPDF, 1000); return; }
+            const { jsPDF } = window.jspdf;
+            var doc = new jsPDF({direction: 'rtl'});
+            doc.setFont('Tajawal', 'bold');
+            doc.text('تقرير الجرد', 105, 15, {align: 'center'});
+            doc.setFontSize(10);
+            doc.text('تاريخ الجرد: ' + document.getElementById('inventoryDate').value, 105, 22, {align: 'center'});
+            
+            var tableData = [];
+            var rows = document.querySelectorAll('#inventoryBody tr');
+            rows.forEach(function(row) {
+                var cells = row.querySelectorAll('td');
+                if (cells.length > 0) {
+                    var rowData = [];
+                    cells.forEach(function(cell, idx) { if (idx < 6) rowData.push(cell.textContent.trim()); });
+                    if (rowData.length > 0) tableData.push(rowData);
+                }
+            });
+            
+            doc.autoTable({
+                head: [['الخزان', 'المجموعة', 'آخر قراءة', 'آخر وقت', 'القراءة', '💧', 'الحجم']],
+                body: tableData,
+                startY: 30,
+                theme: 'grid',
+                styles: {font: 'Tajawal', fontSize: 8},
+                headStyles: {fillColor: [37, 99, 235]}
+            });
+            doc.save('تقرير_الجرد_' + new Date().toISOString().slice(0,10) + '.pdf');
+            showToast('✅ تم التصدير');
+        }
+
+        function exportGroupInventoryPDF() {
+            if (typeof window.jspdf === 'undefined') { showToast('⚠️ جاري التحميل...'); setTimeout(exportGroupInventoryPDF, 1000); return; }
+            const { jsPDF } = window.jspdf;
+            var doc = new jsPDF({direction: 'rtl'});
+            doc.setFont('Tajawal', 'bold');
+            doc.text('تقرير جرد المجموعات', 105, 15, {align: 'center'});
+            doc.save('تقرير_المجموعات_' + new Date().toISOString().slice(0,10) + '.pdf');
+            showToast('✅ تم التصدير');
+        }
+
+        function exportSamplesPDF() {
+            if (typeof window.jspdf === 'undefined') { showToast('⚠️ جاري التحميل...'); setTimeout(exportSamplesPDF, 1000); return; }
+            const { jsPDF } = window.jspdf;
+            var doc = new jsPDF({direction: 'rtl'});
+            doc.setFont('Tajawal', 'bold');
+            doc.text('سجل العينات', 105, 15, {align: 'center'});
+            
+            var tableData = [];
+            samples.slice(0, 50).forEach(function(s) {
+                tableData.push([s.date, s.time, s.tankName, s.notes || '-']);
+            });
+            
+            doc.autoTable({
+                head: [['التاريخ', 'الوقت', 'الخزان', 'ملاحظات']],
+                body: tableData,
+                startY: 25,
+                theme: 'grid',
+                styles: {font: 'Tajawal', fontSize: 8},
+                headStyles: {fillColor: [124, 58, 237]}
+            });
+            doc.save('سجل_العينات_' + new Date().toISOString().slice(0,10) + '.pdf');
+            showToast('✅ تم تصدير العينات');
+        }
+
+        // === بدء ===
+        window.onload = function() {
+            if (typeof window.jspdf === 'undefined') {
+                console.log('jsPDF not loaded yet, waiting...');
+            }
+        };
+    </script>
+</body>
+</html>
